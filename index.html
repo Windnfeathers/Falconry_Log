@@ -419,8 +419,20 @@ function speak(text) {
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 0.95; u.pitch = 1;
-  u.onstart = () => { if (recognition && isListening) { try { recognition.stop(); } catch(e) {} } };
-  u.onend = () => { if (isListening) { setTimeout(() => { try { recognition.start(); } catch(e) {} }, 300); } };
+  u.onstart = () => {
+    window._ttsActive = true;
+    if (recognition && isListening) { try { recognition.stop(); } catch(e) {} }
+  };
+  u.onend = () => {
+    window._ttsActive = false;
+    window._ttsBlocked = true;
+    if (isListening) {
+      setTimeout(() => {
+        window._ttsBlocked = false;
+        try { recognition.start(); } catch(e) {}
+      }, 1500);
+    }
+  };
   window.speechSynthesis.speak(u);
 }
 function numFrom(str) { const m = str.match(/[\d.]+/); return m ? parseFloat(m[0]) : null; }
@@ -763,6 +775,7 @@ function stopListening() {
 function toggleVoice() { isListening ? stopListening() : startListening(); }
 
 function processVoice(text) {
+  if (window._ttsActive || window._ttsBlocked) return;
   const u = S.settings.unit;
   const t = today();
 
