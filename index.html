@@ -1014,13 +1014,18 @@ function clearAll() {
 // SERVICE WORKER
 // ══════════════════════════════════════════════════════
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW error', e));
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => r.unregister());
+  }).then(() => {
+    navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW error', e));
+  });
 }
 
 // ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
 load();
+console.log('Falconry Log loaded. Birds:', S.birds.length, 'Entries:', S.entries.length);
 checkDriveCallback();
 initVoice();
 renderBirdList();
