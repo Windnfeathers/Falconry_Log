@@ -251,6 +251,11 @@ textarea { resize: vertical; min-height: 80px; }
 
     <div class="card">
       <h2>Manual entry</h2>
+      <label>Date and time</label>
+      <div class="field-row">
+        <input id="m-date" type="date">
+        <input id="m-time" type="time" style="max-width:130px">
+      </div>
       <label>Pre-feed weight</label>
       <input id="m-pre" type="number" step="0.1" placeholder="0.0" inputmode="decimal">
       <label>Post-feed weight <span style="font-weight:400;color:var(--text-faint)">(auto-calculates food eaten)</span></label>
@@ -526,6 +531,7 @@ function selectBird(id) {
   buildPerfButtons();
   loadSettings();
   updateToday();
+  initDateTimeFields();
   if (S.settings.autostart === '1') {
     setTimeout(() => { speak('Listening for ' + b.name); startListening(); }, 900);
   }
@@ -579,11 +585,23 @@ function makeEntry(overrides) {
 }
 
 function lastTodayEntry() {
-  const arr = S.entries.filter(e => e.birdId === currentBirdId && e.date === today());
+  const sessionDate = document.getElementById('m-date')?.value || today();
+  const arr = S.entries.filter(e => e.birdId === currentBirdId && e.date === sessionDate);
   return arr.length ? arr[arr.length - 1] : null;
 }
 
+function initDateTimeFields() {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  const timeStr = now.toTimeString().slice(0, 5);
+  document.getElementById('m-date').value = dateStr;
+  document.getElementById('m-time').value = timeStr;
+}
+
 function saveManual() {
+  const dateVal = document.getElementById('m-date').value || today();
+  const timeVal = document.getElementById('m-time').value || new Date().toTimeString().slice(0, 5);
+  const timestamp = new Date(dateVal + 'T' + timeVal + ':00').toISOString();
   const pre = document.getElementById('m-pre').value;
   const post = document.getElementById('m-post').value;
   const foodType = document.getElementById('m-food-type').value.trim();
@@ -591,14 +609,16 @@ function saveManual() {
   const temp = document.getElementById('m-temp').value;
   const journal = document.getElementById('m-journal').value.trim();
   const computed = pre && post ? Math.abs(parseFloat(pre) - parseFloat(post)).toFixed(2) : null;
-  S.entries.push(makeEntry({
+  S.entries.push({
+    id: uid(), birdId: currentBirdId, date: dateVal, timestamp,
     prefeedWeight: pre || null, postfeedWeight: post || null,
     foodType: foodType || null, foodWeight: foodWt || computed || null,
     temp: temp || null, performance: selectedPerf || null, journal: journal || null
-  }));
+  });
   save(); updateToday();
   ['m-pre','m-post','m-food-type','m-food-wt','m-temp','m-journal'].forEach(id => document.getElementById(id).value = '');
   selectedPerf = null; document.querySelectorAll('.perf-btn').forEach(x => x.classList.remove('sel'));
+  initDateTimeFields();
   showToast('Entry saved'); speak('Entry saved');
 }
 
@@ -737,16 +757,28 @@ function processVoice(text) {
   const u = S.settings.unit;
   const t = today();
 
-  // Stop commands
-  if (/\b(stop|done|save|that'?s? all|finish)\b/.test(text)) { stopListening(); return; }
+  // Stop + save
+  if (/\b(stop|done|save|that'?s? all|finish)\b/.test(text)) {
+    const last = lastTodayEntry();
+    if (last) { save(); updateToday(); speak('Entry saved.'); showToast('Entry saved'); }
+    stopListening(); return;
+  }
 
-  // Undo
+  // Undo last data point only
   if (/\b(cancel|undo|scratch that|remove that|delete that)\b/.test(text)) {
-    const all = S.entries.filter(e => e.birdId === currentBirdId);
-    if (all.length) {
-      const last = all[all.length - 1];
-      S.entries = S.entries.filter(e => e.id !== last.id);
-      save(); updateToday(); speak('Last entry removed.'); showToast('Removed last entry');
+    const last = lastTodayEntry();
+    if (last) {
+      const fields = ['journal','performance','temp','foodWeight','foodType','postfeedWeight','prefeedWeight'];
+      let removed = null;
+      for (const f of fields) {
+        if (last[f] !== null && last[f] !== undefined) { removed = f; last[f] = null; break; }
+      }
+      const isEmpty = ['prefeedWeight','postfeedWeight','foodType','foodWeight','temp','performance','journal'].every(f => last[f] === null || last[f] === undefined);
+      if (isEmpty) S.entries = S.entries.filter(e => e.id !== last.id);
+      save(); updateToday();
+      const label = { prefeedWeight:'Weight', postfeedWeight:'Post-feed', foodType:'Food type', foodWeight:'Food weight', temp:'Temperature', performance:'Performance', journal:'Note' };
+      speak((removed ? label[removed] : 'Last entry') + ' removed.');
+      showToast((removed ? label[removed] : 'Last entry') + ' removed');
     }
     return;
   }
@@ -787,16 +819,21 @@ function processVoice(text) {
     return;
   }
 
-  // Food
+  // Food — buffer 4 seconds to capture type + weight in one phrase
   if (/\b(food|fed|gave|quail|mouse|chick|rabbit|pigeon|starling|sparrow|rat|duck|squirrel|tidbit)\b/.test(text)) {
-    const wt = numFrom(text);
-    const typeM = text.match(/\b(quail|mouse|chick|rabbit|pigeon|starling|sparrow|rat|duck|squirrel|tidbit|prey)\b/i);
-    const foodType = typeM ? typeM[0] : 'food';
-    const last = lastTodayEntry();
-    if (last) { last.foodType = foodType; if (wt) last.foodWeight = wt; }
-    else S.entries.push(makeEntry({ foodType, foodWeight: wt || null }));
-    save(); updateToday();
-    speak('Food logged: ' + foodType + (wt ? ' ' + fmtW(wt, u) : '')); showToast('Food: ' + foodType + (wt ? ' ' + fmtW(wt, u) : ''));
+    if (window._foodTimer) clearTimeout(window._foodTimer);
+    window._foodBuffer = (window._foodBuffer || '') + ' ' + text;
+    window._foodTimer = setTimeout(() => {
+      const buf = window._foodBuffer; window._foodBuffer = ''; window._foodTimer = null;
+      const wt = numFrom(buf);
+      const typeM = buf.match(/\b(quail|mouse|chick|rabbit|pigeon|starling|sparrow|rat|duck|squirrel|tidbit|prey)\b/i);
+      const foodType = typeM ? typeM[0] : 'food';
+      const last = lastTodayEntry();
+      if (last) { last.foodType = foodType; if (wt) last.foodWeight = wt; }
+      else S.entries.push(makeEntry({ foodType, foodWeight: wt || null }));
+      save(); updateToday();
+      speak('Food logged: ' + foodType + (wt ? ' ' + fmtW(wt, u) : '')); showToast('Food: ' + foodType + (wt ? ' ' + fmtW(wt, u) : ''));
+    }, 4000);
     return;
   }
 
