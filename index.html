@@ -228,14 +228,14 @@ textarea { resize: vertical; min-height: 80px; }
     <div class="card">
       <h2>Voice commands</h2>
       <div class="cmd-grid">
-        <div class="cmd"><strong>"Weight 32"</strong>Pre-feed weight</div>
-        <div class="cmd"><strong>"Post-feed 29.5"</strong>Post-feed weight</div>
-        <div class="cmd"><strong>"Food quail 1.5"</strong>Food type + weight</div>
-        <div class="cmd"><strong>"Temperature 48"</strong>Outside temp</div>
-        <div class="cmd"><strong>"Performance 8"</strong>Rating 1–10</div>
-        <div class="cmd"><strong>"Note she flew well"</strong>Journal entry</div>
-        <div class="cmd"><strong>"Cancel" / "Undo"</strong>Remove last entry</div>
-        <div class="cmd"><strong>"Done" / "Save"</strong>Stop listening</div>
+        <div class="cmd"><strong>"Weight"</strong>Pre-feed weight</div>
+        <div class="cmd"><strong>"Post-feed"</strong>Post-feed weight</div>
+        <div class="cmd"><strong>"Food"</strong>Food type + weight</div>
+        <div class="cmd"><strong>"Temperature"</strong>Outside temp</div>
+        <div class="cmd"><strong>"Performance"</strong>Rating 1–10</div>
+        <div class="cmd"><strong>"Note"</strong>Journal entry</div>
+        <div class="cmd"><strong>"Cancel"</strong>Remove last entry</div>
+        <div class="cmd"><strong>"Done"</strong>Stop listening</div>
       </div>
     </div>
 
@@ -414,6 +414,8 @@ function speak(text) {
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 0.95; u.pitch = 1;
+  u.onstart = () => { if (recognition && isListening) { try { recognition.stop(); } catch(e) {} } };
+  u.onend = () => { if (isListening) { setTimeout(() => { try { recognition.start(); } catch(e) {} }, 300); } };
   window.speechSynthesis.speak(u);
 }
 function numFrom(str) { const m = str.match(/[\d.]+/); return m ? parseFloat(m[0]) : null; }
@@ -750,7 +752,7 @@ function processVoice(text) {
   }
 
   // Weight
-  if (/\b(weight|weigh[st]?|pre.?feed|she weighs?)\b/.test(text)) {
+  if (/\b(weight|wait|weigh[st]?|pre.?feed|she weighs?)\b/.test(text)) {
     const val = numFrom(text);
     if (val) {
       S.entries.push(makeEntry({ prefeedWeight: val }));
