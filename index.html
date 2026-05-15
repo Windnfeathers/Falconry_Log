@@ -389,7 +389,17 @@ let charts = {};
 
 // ── Persistence ──
 function load() {
-  try { const d = localStorage.getItem(DB); if (d) S = { ...S, ...JSON.parse(d) }; } catch(e) {}
+  try {
+    const d = localStorage.getItem(DB);
+    if (d) {
+      const parsed = JSON.parse(d);
+      if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.birds)) S.birds = parsed.birds;
+        if (Array.isArray(parsed.entries)) S.entries = parsed.entries;
+        if (parsed.settings && typeof parsed.settings === 'object') S.settings = { ...S.settings, ...parsed.settings };
+      }
+    }
+  } catch(e) { console.log('Load error:', e); }
   driveToken = localStorage.getItem('gdrive_token') || null;
 }
 function save() {
