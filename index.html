@@ -147,6 +147,51 @@ textarea{resize:vertical;min-height:80px}
   </div>
 </div>
 
+<div id="screen-settings" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="showScreen('screen-birds');renderBirdList()">
+      <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back
+    </button>
+    <h1>Settings</h1>
+  </div>
+  <div class="scroll-area">
+    <div class="card">
+      <h2>Units</h2>
+      <label>Weight display unit</label>
+      <select id="gs-unit" onchange="saveGlobalSettings()">
+        <option value="oz">Ounces (oz)</option>
+        <option value="g">Grams (g)</option>
+        <option value="lbs_oz">Lbs + ounces</option>
+      </select>
+    </div>
+    <div class="card">
+      <h2>Voice</h2>
+      <label>Auto-start listening when you select a bird</label>
+      <select id="gs-autostart" onchange="saveGlobalSettings()">
+        <option value="1">Yes</option>
+        <option value="0">No</option>
+      </select>
+    </div>
+    <div class="card">
+      <h2>Google Drive backup</h2>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">Auto-backs up after every save. Requires a Google Cloud OAuth client ID.</p>
+      <input id="gs-client-id" type="text" placeholder="Paste your Google OAuth Client ID here" style="margin-bottom:10px">
+      <button class="btn full primary" onclick="driveSignIn('gs')">Sign in with Google</button>
+      <div id="gs-drive-status" style="font-size:13px;color:var(--text-muted);margin-top:8px;text-align:center"></div>
+      <button class="btn full" style="margin-top:8px" onclick="manualBackup()">Backup now</button>
+      <button class="btn full" style="margin-top:8px" onclick="restoreFromDrive()">Restore from Drive</button>
+    </div>
+    <div class="card">
+      <h2>Data</h2>
+      <button class="btn full" onclick="exportJSON()">Export all data as JSON</button>
+      <label style="margin-top:12px">Import from JSON backup</label>
+      <input type="file" id="gs-import-file" accept=".json" onchange="importJSON(event)" style="font-size:13px;padding:6px">
+      <button class="btn danger full" style="margin-top:12px" onclick="clearAll()">Clear all data</button>
+    </div>
+  </div>
+</div>
+
 <div id="screen-main" class="screen">
   <div class="topbar">
     <button class="back-btn" onclick="goToBirds()">
@@ -459,8 +504,10 @@ function selectBird(id){
 
 function switchTab(tab){
   ['log','history','graphs','settings'].forEach(t=>{
-    document.getElementById('tab-'+t).style.display=t===tab?'flex':'none';
-    document.getElementById('nav-'+t).classList.toggle('active',t===tab);
+    const te=document.getElementById('tab-'+t);
+    const ne=document.getElementById('nav-'+t);
+    if(te)te.style.display=t===tab?'flex':'none';
+    if(ne)ne.classList.toggle('active',t===tab);
   });
   if(tab==='history')renderHistory();
   if(tab==='graphs')renderGraphs();
@@ -468,16 +515,21 @@ function switchTab(tab){
 }
 
 function updateToday(){
+  const tdw=document.getElementById('td-weight');
+  const tdt=document.getElementById('td-temp');
+  const tdf=document.getElementById('td-food');
+  const tdp=document.getElementById('td-perf');
+  if(!tdw||!tdt||!tdf||!tdp)return;
   const u=S.settings.unit;
   const te=S.entries.filter(e=>e.birdId===currentBirdId&&e.date===today());
   const weights=te.map(e=>e.prefeedWeight).filter(w=>w!=null).map(parseFloat);
-  document.getElementById('td-weight').textContent=weights.length?fmtW(Math.min(...weights),u):'--';
+  tdw.textContent=weights.length?fmtW(Math.min(...weights),u):'--';
   const lastTemp=te.filter(e=>e.temp!=null).pop();
-  document.getElementById('td-temp').textContent=lastTemp?lastTemp.temp+'°F':'--';
+  tdt.textContent=lastTemp?lastTemp.temp+'°F':'--';
   const totalFood=te.reduce((s,e)=>s+(e.foodWeight?parseFloat(e.foodWeight):0),0);
-  document.getElementById('td-food').textContent=totalFood>0?fmtW(totalFood,u):'--';
+  tdf.textContent=totalFood>0?fmtW(totalFood,u):'--';
   const lastPerf=te.filter(e=>e.performance!=null).pop();
-  document.getElementById('td-perf').textContent=lastPerf?lastPerf.performance+'/10':'--';
+  tdp.textContent=lastPerf?lastPerf.performance+'/10':'--';
 }
 
 function buildPerfButtons(){
@@ -502,10 +554,13 @@ function initDateTimeFields(){
 }
 
 function updateSessionDisplay(){
-  const dv=document.getElementById('m-date').value;
-  const tv=document.getElementById('m-time').value||new Date().toTimeString().slice(0,5);
+  const mdEl=document.getElementById('m-date');
+  const mtEl=document.getElementById('m-time');
   const el=document.getElementById('session-date-display');
-  if(!el||!dv)return;
+  if(!mdEl||!mtEl||!el)return;
+  const dv=mdEl.value;
+  const tv=mtEl.value||new Date().toTimeString().slice(0,5);
+  if(!dv)return;
   const d=new Date(dv+'T'+tv+':00');
   el.textContent='Logging for: '+d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})+' at '+tv;
 }
@@ -539,13 +594,13 @@ function saveManual(){
     const idx=S.entries.findIndex(e=>e.id===editingEntryId);
     if(idx!==-1)S.entries[idx]={...S.entries[idx],...data};
     editingEntryId=null;
-    document.getElementById('edit-banner').style.display='none';
-    document.getElementById('save-btn-label').textContent='Save entry';
+    const eb=document.getElementById('edit-banner');if(eb)eb.style.display='none';
+    const sbl=document.getElementById('save-btn-label');if(sbl)sbl.textContent='Save entry';
   }else{
     S.entries.push({id:uid(),...data});
   }
   save();updateToday();
-  ['m-pre','m-post','m-food-type','m-food-wt','m-temp','m-journal'].forEach(id=>document.getElementById(id).value='');
+  ['m-pre','m-post','m-food-type','m-food-wt','m-temp','m-journal'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   selectedPerf=null;document.querySelectorAll('.perf-btn').forEach(x=>x.classList.remove('sel'));
   initDateTimeFields();
   showToast('Entry saved');speak('Entry saved');
@@ -557,28 +612,29 @@ function editEntry(id){
   editingEntryId=id;
   switchTab('log');
   const d=new Date(e.timestamp);
-  document.getElementById('m-date').value=e.date;
-  document.getElementById('m-time').value=d.toTimeString().slice(0,5);
-  document.getElementById('m-pre').value=e.prefeedWeight!=null?e.prefeedWeight:'';
-  document.getElementById('m-post').value=e.postfeedWeight!=null?e.postfeedWeight:'';
-  document.getElementById('m-food-type').value=e.foodType||'';
-  document.getElementById('m-food-wt').value=e.foodWeight!=null?e.foodWeight:'';
-  document.getElementById('m-temp').value=e.temp!=null?e.temp:'';
-  document.getElementById('m-journal').value=e.journal||'';
+  const setVal=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val;};
+  setVal('m-date',e.date);
+  setVal('m-time',d.toTimeString().slice(0,5));
+  setVal('m-pre',e.prefeedWeight!=null?e.prefeedWeight:'');
+  setVal('m-post',e.postfeedWeight!=null?e.postfeedWeight:'');
+  setVal('m-food-type',e.foodType||'');
+  setVal('m-food-wt',e.foodWeight!=null?e.foodWeight:'');
+  setVal('m-temp',e.temp!=null?e.temp:'');
+  setVal('m-journal',e.journal||'');
   selectedPerf=e.performance||null;
   document.querySelectorAll('.perf-btn').forEach((x,j)=>x.classList.toggle('sel',selectedPerf&&j+1<=selectedPerf));
-  document.getElementById('edit-banner').style.display='flex';
-  document.getElementById('save-btn-label').textContent='Update entry';
+  const eb2=document.getElementById('edit-banner');if(eb2)eb2.style.display='flex';
+  const sbl2=document.getElementById('save-btn-label');if(sbl2)sbl2.textContent='Update entry';
   updateSessionDisplay();
   setTimeout(()=>{const el=document.getElementById('tab-log');if(el)el.scrollTo(0,300);},100);
 }
 
 function cancelEdit(){
   editingEntryId=null;
-  ['m-pre','m-post','m-food-type','m-food-wt','m-temp','m-journal'].forEach(id=>document.getElementById(id).value='');
+  ['m-pre','m-post','m-food-type','m-food-wt','m-temp','m-journal'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   selectedPerf=null;document.querySelectorAll('.perf-btn').forEach(x=>x.classList.remove('sel'));
-  document.getElementById('edit-banner').style.display='none';
-  document.getElementById('save-btn-label').textContent='Save entry';
+  const ceb=document.getElementById('edit-banner');if(ceb)ceb.style.display='none';
+  const csbl=document.getElementById('save-btn-label');if(csbl)csbl.textContent='Save entry';
   initDateTimeFields();
 }
 
@@ -768,8 +824,8 @@ function initVoice(){
       if(e.results[i].isFinal)final+=e.results[i][0].transcript;
       else interim+=e.results[i][0].transcript;
     }
-    document.getElementById('voice-heard').textContent=final||interim;
-    if(final){setTimeout(()=>document.getElementById('voice-heard').textContent='',2000);processVoice(final.trim().toLowerCase());}
+    const vh=document.getElementById('voice-heard');if(vh)vh.textContent=final||interim;
+    if(final){setTimeout(()=>{const vhc=document.getElementById('voice-heard');if(vhc)vhc.textContent='';},2000);processVoice(final.trim().toLowerCase());}
   };
   recognition.onend=()=>{if(isListening&&!window._ttsActive&&!window._ttsBlocked){setTimeout(()=>{if(isListening&&!window._ttsActive&&!window._ttsBlocked){try{recognition.start();}catch(e){}}},250);}};
   recognition.onerror=e=>{if(e.error!=='no-speech')console.log('SR:',e.error);};
@@ -779,16 +835,21 @@ function startListening(){
   if(!recognition)return;
   isListening=true;
   try{recognition.start();}catch(e){}
-  document.getElementById('mic-btn').classList.add('listening');
-  document.getElementById('voice-status').innerHTML='<span class="status-dot"></span>Listening...';
+  const mb=document.getElementById('mic-btn');
+  const vs=document.getElementById('voice-status');
+  if(mb)mb.classList.add('listening');
+  if(vs)vs.innerHTML='<span class="status-dot"></span>Listening...';
 }
 function stopListening(){
   if(!recognition)return;
   isListening=false;
   try{recognition.stop();}catch(e){}
-  document.getElementById('mic-btn').classList.remove('listening');
-  document.getElementById('voice-status').innerHTML='<span class="status-dot off"></span>Tap mic to start listening';
-  document.getElementById('voice-heard').textContent='';
+  const mb=document.getElementById('mic-btn');
+  const vs=document.getElementById('voice-status');
+  const vh=document.getElementById('voice-heard');
+  if(mb)mb.classList.remove('listening');
+  if(vs)vs.innerHTML='<span class="status-dot off"></span>Tap mic to start listening';
+  if(vh)vh.textContent='';
 }
 function toggleVoice(){isListening?stopListening():startListening();}
 
@@ -906,12 +967,16 @@ function processVoice(text){
 }
 
 function showGlobalSettings(){
-  document.getElementById('gs-unit').value=S.settings.unit||'oz';
-  document.getElementById('gs-autostart').value=S.settings.autostart||'1';
-  const cid=localStorage.getItem('gdrive_client_id')||'';
-  document.getElementById('gs-client-id').value=cid;
-  document.getElementById('gs-drive-status').textContent=driveToken?'Connected to Google Drive. Auto-backup enabled.':'';
   showScreen('screen-settings');
+  const cid=localStorage.getItem('gdrive_client_id')||'';
+  const gu=document.getElementById('gs-unit');
+  const ga=document.getElementById('gs-autostart');
+  const gc=document.getElementById('gs-client-id');
+  const gd=document.getElementById('gs-drive-status');
+  if(gu)gu.value=S.settings.unit||'oz';
+  if(ga)ga.value=S.settings.autostart||'1';
+  if(gc)gc.value=cid;
+  if(gd)gd.textContent=driveToken?'Connected to Google Drive. Auto-backup enabled.':'';
 }
 function saveGlobalSettings(){
   S.settings.unit=document.getElementById('gs-unit').value;
