@@ -95,6 +95,7 @@ textarea{resize:vertical;min-height:80px}
 <div id="screen-birds" class="screen active">
   <div class="topbar">
     <h1>Falconry Log</h1>
+    <button class="btn sm" onclick="showGlobalSettings()">Settings</button>
     <button class="btn sm" onclick="showAddBird()">+ Add bird</button>
   </div>
   <div class="scroll-area">
@@ -492,8 +493,11 @@ function buildPerfButtons(){
 
 function initDateTimeFields(){
   const now=new Date();
-  document.getElementById('m-date').value=now.toISOString().slice(0,10);
-  document.getElementById('m-time').value=now.toTimeString().slice(0,5);
+  const md=document.getElementById('m-date');
+  const mt=document.getElementById('m-time');
+  if(!md||!mt)return;
+  md.value=now.toISOString().slice(0,10);
+  mt.value=now.toTimeString().slice(0,5);
   updateSessionDisplay();
 }
 
@@ -737,11 +741,15 @@ function renderGraphs(){
 }
 
 function loadSettings(){
-  document.getElementById('s-unit').value=S.settings.unit||'oz';
-  document.getElementById('s-autostart').value=S.settings.autostart||'1';
+  const su=document.getElementById('s-unit');
+  const sa=document.getElementById('s-autostart');
+  const sc=document.getElementById('s-client-id');
+  const sd=document.getElementById('drive-status');
   const cid=localStorage.getItem('gdrive_client_id')||'';
-  document.getElementById('s-client-id').value=cid;
-  document.getElementById('drive-status').textContent=driveToken?'Connected to Google Drive. Auto-backup enabled.':'';
+  if(su)su.value=S.settings.unit||'oz';
+  if(sa)sa.value=S.settings.autostart||'1';
+  if(sc)sc.value=cid;
+  if(sd)sd.textContent=driveToken?'Connected to Google Drive. Auto-backup enabled.':'';
 }
 function saveSettings(){
   S.settings.unit=document.getElementById('s-unit').value;
@@ -897,8 +905,22 @@ function processVoice(text){
   }
 }
 
-function driveSignIn(){
-  const clientId=document.getElementById('s-client-id').value.trim();
+function showGlobalSettings(){
+  document.getElementById('gs-unit').value=S.settings.unit||'oz';
+  document.getElementById('gs-autostart').value=S.settings.autostart||'1';
+  const cid=localStorage.getItem('gdrive_client_id')||'';
+  document.getElementById('gs-client-id').value=cid;
+  document.getElementById('gs-drive-status').textContent=driveToken?'Connected to Google Drive. Auto-backup enabled.':'';
+  showScreen('screen-settings');
+}
+function saveGlobalSettings(){
+  S.settings.unit=document.getElementById('gs-unit').value;
+  S.settings.autostart=document.getElementById('gs-autostart').value;
+  save();showToast('Settings saved');
+}
+function driveSignIn(prefix){
+  const pid=prefix||'s';
+  const clientId=document.getElementById(pid+'-client-id').value.trim();
   if(!clientId){alert('Paste your Google OAuth Client ID first.');return;}
   localStorage.setItem('gdrive_client_id',clientId);
   const params=new URLSearchParams({client_id:clientId,redirect_uri:window.location.href.split('?')[0].split('#')[0],response_type:'token',scope:'https://www.googleapis.com/auth/drive.appdata',prompt:'select_account'});
