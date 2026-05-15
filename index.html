@@ -218,6 +218,7 @@ textarea { resize: vertical; min-height: 80px; }
   <!-- LOG TAB -->
   <div id="tab-log" class="scroll-area">
     <div class="voice-area">
+      <div id="session-date-display" style="font-size:13px;color:var(--text-muted);align-self:stretch;text-align:left;padding-bottom:4px;border-bottom:0.5px solid var(--border);margin-bottom:4px;"></div>
       <button class="mic-btn" id="mic-btn" onclick="toggleVoice()" aria-label="Toggle voice input">
         <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
       </button>
@@ -251,11 +252,10 @@ textarea { resize: vertical; min-height: 80px; }
 
     <div class="card">
       <h2>Manual entry</h2>
-      <label>Date and time</label>
-      <div class="field-row">
-        <input id="m-date" type="date">
-        <input id="m-time" type="time" style="max-width:130px">
-      </div>
+      <label>Date</label>
+      <input id="m-date" type="date" onchange="updateSessionDisplay()" style="width:100%;font-size:16px;padding:12px;border:1px solid var(--border-md);border-radius:8px;background:var(--bg);color:var(--text);-webkit-appearance:none;appearance:none;">
+      <label style="margin-top:10px">Time</label>
+      <input id="m-time" type="time" style="width:100%;font-size:16px;padding:12px;border:1px solid var(--border-md);border-radius:8px;background:var(--bg);color:var(--text);-webkit-appearance:none;appearance:none;">
       <label>Pre-feed weight</label>
       <input id="m-pre" type="number" step="0.1" placeholder="0.0" inputmode="decimal">
       <label>Post-feed weight <span style="font-weight:400;color:var(--text-faint)">(auto-calculates food eaten)</span></label>
@@ -596,9 +596,18 @@ function initDateTimeFields() {
   const timeStr = now.toTimeString().slice(0, 5);
   document.getElementById('m-date').value = dateStr;
   document.getElementById('m-time').value = timeStr;
+  const display = document.getElementById('session-date-display');
+  if (display) display.textContent = 'Logging for: ' + now.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) + ' at ' + timeStr;
 }
 
-function saveManual() {
+function updateSessionDisplay() {
+  const dateVal = document.getElementById('m-date').value;
+  const timeVal = document.getElementById('m-time').value || new Date().toTimeString().slice(0,5);
+  const display = document.getElementById('session-date-display');
+  if (!display || !dateVal) return;
+  const d = new Date(dateVal + 'T' + timeVal);
+  display.textContent = 'Logging for: ' + d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) + ' at ' + timeVal;
+}
   const dateVal = document.getElementById('m-date').value || today();
   const timeVal = document.getElementById('m-time').value || new Date().toTimeString().slice(0, 5);
   const timestamp = new Date(dateVal + 'T' + timeVal + ':00').toISOString();
@@ -819,12 +828,17 @@ function processVoice(text) {
     return;
   }
 
-  // Food — buffer 4 seconds to capture type + weight in one phrase
+  // Food — wait up to 5 seconds for a second final result with weight/type detail
   if (/\b(food|fed|gave|quail|mouse|chick|rabbit|pigeon|starling|sparrow|rat|duck|squirrel|tidbit)\b/.test(text)) {
+    if (window._foodCommitted) return;
     if (window._foodTimer) clearTimeout(window._foodTimer);
-    window._foodBuffer = (window._foodBuffer || '') + ' ' + text;
-    window._foodTimer = setTimeout(() => {
-      const buf = window._foodBuffer; window._foodBuffer = ''; window._foodTimer = null;
+    window._foodBuffer = text;
+    window._foodCommitted = false;
+    const commitFood = () => {
+      if (window._foodCommitted) return;
+      window._foodCommitted = true;
+      window._foodTimer = null;
+      const buf = window._foodBuffer; window._foodBuffer = '';
       const wt = numFrom(buf);
       const typeM = buf.match(/\b(quail|mouse|chick|rabbit|pigeon|starling|sparrow|rat|duck|squirrel|tidbit|prey)\b/i);
       const foodType = typeM ? typeM[0] : 'food';
@@ -833,7 +847,29 @@ function processVoice(text) {
       else S.entries.push(makeEntry({ foodType, foodWeight: wt || null }));
       save(); updateToday();
       speak('Food logged: ' + foodType + (wt ? ' ' + fmtW(wt, u) : '')); showToast('Food: ' + foodType + (wt ? ' ' + fmtW(wt, u) : ''));
-    }, 4000);
+      setTimeout(() => { window._foodCommitted = false; }, 2000);
+    };
+    window._foodTimer = setTimeout(commitFood, 5000);
+    return;
+  }
+  // If food is waiting and another final result comes in, append and reset timer
+  if (window._foodTimer && !window._foodCommitted) {
+    clearTimeout(window._foodTimer);
+    window._foodBuffer = (window._foodBuffer || '') + ' ' + text;
+    window._foodTimer = setTimeout(() => {
+      const buf = window._foodBuffer; window._foodBuffer = ''; window._foodTimer = null;
+      if (window._foodCommitted) return;
+      window._foodCommitted = true;
+      const wt = numFrom(buf);
+      const typeM = buf.match(/\b(quail|mouse|chick|rabbit|pigeon|starling|sparrow|rat|duck|squirrel|tidbit|prey)\b/i);
+      const foodType = typeM ? typeM[0] : 'food';
+      const last = lastTodayEntry();
+      if (last) { last.foodType = foodType; if (wt) last.foodWeight = wt; }
+      else S.entries.push(makeEntry({ foodType, foodWeight: wt || null }));
+      save(); updateToday();
+      speak('Food logged: ' + foodType + (wt ? ' ' + fmtW(wt, u) : '')); showToast('Food: ' + foodType + (wt ? ' ' + fmtW(wt, u) : ''));
+      setTimeout(() => { window._foodCommitted = false; }, 2000);
+    }, 5000);
     return;
   }
 
