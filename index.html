@@ -323,7 +323,7 @@ let backupTimer=null;
 function scheduleBackup(){clearTimeout(backupTimer);backupTimer=setTimeout(doBackup,3000);}
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
-function today(){return new Date().toISOString().slice(0,10);}
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function fmtW(val,unit){
   if(val==null||val===''||isNaN(val))return'--';
   const v=parseFloat(val);
@@ -566,7 +566,7 @@ function editEntry(id){
   document.getElementById('edit-banner').style.display='flex';
   document.getElementById('save-btn-label').textContent='Update entry';
   updateSessionDisplay();
-  document.getElementById('tab-log').scrollTo(0,0);
+  setTimeout(()=>{const el=document.getElementById('tab-log');if(el)el.scrollTo(0,300);},100);
 }
 
 function cancelEdit(){
@@ -599,30 +599,81 @@ function renderHistory(){
     .sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
   const u=S.settings.unit;
   if(!entries.length){list.innerHTML='<div class="empty">No entries yet.</div>';return;}
-  list.innerHTML=entries.map(e=>{
+  list.innerHTML='';
+  entries.forEach(e=>{
     const d=new Date(e.timestamp);
     const ds=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     const ts=d.toTimeString().slice(0,5);
     const parts=[];
-    if(e.prefeedWeight!=null)parts.push('Weight: '+fmtW(e.prefeedWeight,u)+(e.postfeedWeight!=null?' &rarr; '+fmtW(e.postfeedWeight,u):''));
+    if(e.prefeedWeight!=null)parts.push('Weight: '+fmtW(e.prefeedWeight,u)+(e.postfeedWeight!=null?' &rarr; '+fmtW(e.postfeedWeight,u)+(e.foodWeight!=null?' (ate '+fmtW(e.foodWeight,u)+')':''):''));
     if(e.temp!=null)parts.push('Temp: '+e.temp+'°F');
-    return`<div class="log-item">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div class="log-date">${ds} &bull; ${ts}</div>
-        <div style="display:flex;gap:6px">
-          <button class="btn sm" onclick="editEntry('${e.id}')">Edit</button>
-          <button class="btn sm danger" onclick="deleteEntry('${e.id}')">Delete</button>
-        </div>
-      </div>
-      ${parts.map(p=>`<div class="log-detail">${p}</div>`).join('')}
-      ${e.journal?`<div class="log-note">${e.journal}</div>`:''}
-      <div class="tags">
-        ${e.foodType!=null?`<span class="tag food">${e.foodType}${e.foodWeight!=null?' &bull; '+fmtW(e.foodWeight,u):''}</span>`:''}
-        ${e.performance!=null?`<span class="tag perf">${e.performance}/10</span>`:''}
-        ${e.temp!=null?`<span class="tag temp">${e.temp}°F</span>`:''}
-      </div>
-    </div>`;
-  }).join('');
+
+    const item=document.createElement('div');
+    item.className='log-item';
+
+    const header=document.createElement('div');
+    header.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:4px';
+
+    const dateDiv=document.createElement('div');
+    dateDiv.className='log-date';
+    dateDiv.textContent=ds+' • '+ts;
+
+    const btnRow=document.createElement('div');
+    btnRow.style.cssText='display:flex;gap:6px';
+
+    const editBtn=document.createElement('button');
+    editBtn.className='btn sm';
+    editBtn.textContent='Edit';
+    editBtn.addEventListener('click',()=>editEntry(e.id));
+
+    const delBtn=document.createElement('button');
+    delBtn.className='btn sm danger';
+    delBtn.textContent='Delete';
+    delBtn.addEventListener('click',()=>deleteEntry(e.id));
+
+    btnRow.appendChild(editBtn);
+    btnRow.appendChild(delBtn);
+    header.appendChild(dateDiv);
+    header.appendChild(btnRow);
+    item.appendChild(header);
+
+    parts.forEach(p=>{
+      const pd=document.createElement('div');
+      pd.className='log-detail';
+      pd.textContent=p;
+      item.appendChild(pd);
+    });
+
+    if(e.journal){
+      const jd=document.createElement('div');
+      jd.className='log-note';
+      jd.textContent=e.journal;
+      item.appendChild(jd);
+    }
+
+    const tags=document.createElement('div');
+    tags.className='tags';
+    if(e.foodType!=null||e.foodWeight!=null){
+      const t=document.createElement('span');
+      t.className='tag food';
+      t.textContent=(e.foodType||'food')+(e.foodWeight!=null?' • '+fmtW(e.foodWeight,u):'');
+      tags.appendChild(t);
+    }
+    if(e.performance!=null){
+      const t=document.createElement('span');
+      t.className='tag perf';
+      t.textContent=e.performance+'/10';
+      tags.appendChild(t);
+    }
+    if(e.temp!=null){
+      const t=document.createElement('span');
+      t.className='tag temp';
+      t.textContent=e.temp+'°F';
+      tags.appendChild(t);
+    }
+    item.appendChild(tags);
+    list.appendChild(item);
+  });
 }
 
 function renderGraphs(){
@@ -712,7 +763,7 @@ function initVoice(){
     document.getElementById('voice-heard').textContent=final||interim;
     if(final){setTimeout(()=>document.getElementById('voice-heard').textContent='',2000);processVoice(final.trim().toLowerCase());}
   };
-  recognition.onend=()=>{if(isListening){try{recognition.start();}catch(e){}}};
+  recognition.onend=()=>{if(isListening&&!window._ttsActive&&!window._ttsBlocked){setTimeout(()=>{if(isListening&&!window._ttsActive&&!window._ttsBlocked){try{recognition.start();}catch(e){}}},250);}};
   recognition.onerror=e=>{if(e.error!=='no-speech')console.log('SR:',e.error);};
 }
 
