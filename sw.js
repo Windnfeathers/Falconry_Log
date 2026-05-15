@@ -1,27 +1,32 @@
-const CACHE_NAME = 'falconry-log-v3';
+const CACHE_NAME = 'falconry-log-v4';
+const BASE = '/falconry_log/';
 const ASSETS = [
-  '/falconry_log/',
-  '/falconry_log/index.html',
-  '/falconry_log/manifest.json',
-  'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js'
+  BASE,
+  BASE + 'index.html',
+  BASE + 'manifest.json',
 ];
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => caches.match('/falconry_log/')))
+    caches.match(e.request)
+      .then(cached => cached || fetch(e.request)
+        .catch(() => caches.match(BASE + 'index.html'))
+      )
   );
 });
