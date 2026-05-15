@@ -1,4 +1,4 @@
-const CACHE_NAME = 'falconry-log-v1';
+const CACHE_NAME = 'falconry-log-v3';
 const ASSETS = [
   '/falconry_log/',
   '/falconry_log/index.html',
