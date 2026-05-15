@@ -630,6 +630,8 @@ function updateSessionDisplay() {
   const d = new Date(dateVal + 'T' + timeVal);
   display.textContent = 'Logging for: ' + d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) + ' at ' + timeVal;
 }
+
+function saveManual() {
   const dateVal = document.getElementById('m-date').value || today();
   const timeVal = document.getElementById('m-time').value || new Date().toTimeString().slice(0, 5);
   const timestamp = new Date(dateVal + 'T' + timeVal + ':00').toISOString();
