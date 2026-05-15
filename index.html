@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1D9E75">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Falconry Log">
+<link rel="manifest" href="manifest.json">
+<title>Falconry Log</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* ── Reset & base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --green: #1D9E75;
+  --green-dark: #0F6E56;
+  --bg: #f5f5f3;
+  --surface: #ffffff;
+  --border: rgba(0,0,0,0.1);
+  --border-md: rgba(0,0,0,0.2);
+  --text: #1a1a1a;
+  --text-muted: #666;
+  --text-faint: #999;
+  --info-bg: #e6f1fb;
+  --info-text: #185fa5;
+  --warn-bg: #faeeda;
+  --warn-text: #854f0b;
+  --success-bg: #eaf3de;
+  --success-text: #3b6d11;
+  --danger-bg: #fcebeb;
+  --danger-text: #a32d2d;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111;
+    --surface: #1c1c1e;
+    --border: rgba(255,255,255,0.1);
+    --border-md: rgba(255,255,255,0.2);
+    --text: #f0f0f0;
+    --text-muted: #aaa;
+    --text-faint: #666;
+    --info-bg: #0c2540;
+    --info-text: #85b7eb;
+    --warn-bg: #3a2800;
+    --warn-text: #ef9f27;
+    --success-bg: #172a08;
+    --success-text: #97c459;
+    --danger-bg: #2a0a0a;
+    --danger-text: #f09595;
+  }
+}
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 16px; -webkit-tap-highlight-color: transparent; }
+/* ── Layout ── */
+#app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.screen { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.screen.active { display: flex; }
+.topbar { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.topbar h1 { font-size: 18px; font-weight: 600; flex: 1; }
+.scroll-area { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; -webkit-overflow-scrolling: touch; }
+/* ── Nav ── */
+.nav { background: var(--surface); border-top: 0.5px solid var(--border); display: flex; flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom, 0); }
+.nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0; cursor: pointer; border: none; background: none; color: var(--text-muted); font-size: 11px; font-family: inherit; }
+.nav-btn.active { color: var(--green); }
+.nav-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* ── Cards ── */
+.card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+/* ── Buttons ── */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; border: 0.5px solid var(--border-md); border-radius: var(--radius-sm); background: transparent; color: var(--text); font-size: 14px; cursor: pointer; font-family: inherit; transition: background 0.15s, transform 0.1s; -webkit-tap-highlight-color: transparent; }
+.btn:active { transform: scale(0.97); }
+.btn:hover { background: var(--bg); }
+.btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
+.btn.primary:hover { background: var(--green-dark); }
+.btn.danger { border-color: var(--danger-text); color: var(--danger-text); }
+.btn.full { width: 100%; }
+.btn.sm { padding: 7px 12px; font-size: 13px; }
+.back-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; gap: 4px; font-size: 14px; font-family: inherit; padding: 4px 0; }
+/* ── Forms ── */
+label { font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 5px; margin-top: 14px; }
+label:first-of-type { margin-top: 0; }
+input, select, textarea { width: 100%; padding: 10px 12px; border: 0.5px solid var(--border-md); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-size: 15px; font-family: inherit; outline: none; -webkit-appearance: none; }
+input:focus, select:focus, textarea:focus { border-color: var(--green); }
+textarea { resize: vertical; min-height: 80px; }
+.field-row { display: flex; gap: 8px; align-items: flex-end; }
+.field-row > * { flex: 1; }
+/* ── Metrics ── */
+.metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.metric-card { background: var(--bg); border-radius: var(--radius-sm); padding: 12px; text-align: center; }
+.metric-card .lbl { font-size: 12px; color: var(--text-muted); }
+.metric-card .val { font-size: 22px; font-weight: 600; margin-top: 3px; }
+/* ── Bird cards ── */
+.bird-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 10px; }
+.bird-card:active { background: var(--bg); }
+.bird-avatar { width: 46px; height: 46px; border-radius: 50%; background: var(--info-bg); color: var(--info-text); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; flex-shrink: 0; }
+.bird-info h3 { font-size: 15px; font-weight: 600; }
+.bird-info p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+/* ── Voice ── */
+.voice-area { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 20px 16px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.mic-btn { width: 64px; height: 64px; border-radius: 50%; background: var(--green); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s, box-shadow 0.2s; box-shadow: 0 2px 8px rgba(29,158,117,0.3); }
+.mic-btn:active { transform: scale(0.95); }
+.mic-btn.listening { animation: mic-pulse 1.4s ease-in-out infinite; }
+@keyframes mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(29,158,117,0.5); } 50% { box-shadow: 0 0 0 14px rgba(29,158,117,0); } }
+.mic-btn svg { width: 26px; height: 26px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.voice-status { font-size: 13px; color: var(--text-muted); }
+.voice-heard { font-size: 15px; font-weight: 500; min-height: 22px; color: var(--text); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 5px; }
+.status-dot.off { background: var(--text-faint); }
+/* ── Voice command help ── */
+.cmd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+.cmd { background: var(--bg); border-radius: 6px; padding: 7px 10px; font-size: 12px; color: var(--text-muted); }
+.cmd strong { display: block; color: var(--text); font-size: 12px; font-weight: 600; margin-bottom: 1px; }
+/* ── History ── */
+.log-item { border-bottom: 0.5px solid var(--border); padding: 12px 0; }
+.log-item:last-child { border-bottom: none; }
+.log-date { font-size: 12px; color: var(--text-faint); margin-bottom: 3px; }
+.log-detail { font-size: 14px; margin-bottom: 2px; }
+.log-note { font-size: 13px; color: var(--text-muted); font-style: italic; margin-top: 4px; }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.tag { font-size: 11px; padding: 3px 9px; border-radius: 20px; }
+.tag.food { background: var(--warn-bg); color: var(--warn-text); }
+.tag.perf { background: var(--success-bg); color: var(--success-text); }
+.tag.temp { background: var(--info-bg); color: var(--info-text); }
+/* ── Perf buttons ── */
+.perf-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.perf-btn { width: 38px; height: 38px; border-radius: var(--radius-sm); border: 0.5px solid var(--border-md); background: transparent; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-muted); font-family: inherit; transition: background 0.1s; }
+.perf-btn.sel { background: var(--green); color: #fff; border-color: var(--green); }
+/* ── Chart ── */
+.chart-wrap { position: relative; width: 100%; height: 220px; }
+/* ── Misc ── */
+.section-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.empty { text-align: center; padding: 40px 16px; color: var(--text-muted); font-size: 14px; }
+.toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 999; opacity: 0; transition: opacity 0.25s; pointer-events: none; white-space: nowrap; max-width: 90vw; text-align: center; }
+.toast.show { opacity: 1; }
+.calc-result { background: var(--success-bg); color: var(--success-text); border-radius: var(--radius-sm); padding: 12px; text-align: center; font-size: 20px; font-weight: 600; margin-top: 10px; }
+.band-history { font-size: 12px; color: var(--text-faint); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div id="app">
+<div id="toast" class="toast"></div>
+
+<!-- ══════════════════════════════════
+     SCREEN: Bird Select
+══════════════════════════════════ -->
+<div id="screen-birds" class="screen active">
+  <div class="topbar">
+    <h1>Falconry Log</h1>
+    <button class="btn sm" onclick="showAddBird()">+ Add bird</button>
+  </div>
+  <div class="scroll-area">
+    <div class="section-label">Select a bird to log</div>
+    <div id="bird-list"></div>
+    <div id="no-birds" class="empty" style="display:none">No birds yet.<br>Tap "+ Add bird" to get started.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SCREEN: Add / Edit Bird
+══════════════════════════════════ -->
+<div id="screen-add-bird" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="goBack()">
+      <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back
+    </button>
+    <h1 id="add-bird-title">Add bird</h1>
+  </div>
+  <div class="scroll-area">
+    <div class="card">
+      <label>Bird name *</label>
+      <input id="b-name" type="text" placeholder="e.g. Luna" autocomplete="off">
+      <label>Species</label>
+      <input id="b-species" type="text" placeholder="e.g. Red-tailed hawk" autocomplete="off">
+      <label>Band number</label>
+      <input id="b-band" type="text" placeholder="e.g. 1234-56789" autocomplete="off">
+      <div id="b-band-history" class="band-history" style="display:none"></div>
+      <label>Arrival / trap date</label>
+      <input id="b-arrival-date" type="date">
+      <label>Arrival / trap weight</label>
+      <div class="field-row">
+        <input id="b-arrival-weight" type="number" step="0.1" placeholder="0.0">
+        <select id="b-arrival-unit" style="max-width:130px">
+          <option value="oz">Ounces</option>
+          <option value="g">Grams</option>
+          <option value="lbs_oz">Lbs + oz</option>
+        </select>
+      </div>
+      <label>Target weight — minimum (optional)</label>
+      <input id="b-target-min" type="number" step="0.1" placeholder="leave blank if unknown">
+      <label>Target weight — maximum (optional)</label>
+      <input id="b-target-max" type="number" step="0.1" placeholder="leave blank if unknown">
+      <label>Notes</label>
+      <textarea id="b-notes" placeholder="Source, species notes, etc."></textarea>
+      <div style="margin-top:16px; display:flex; gap:8px;">
+        <button class="btn primary full" onclick="saveBird()">Save bird</button>
+        <button id="btn-delete-bird" class="btn danger" onclick="deleteBird()" style="display:none">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SCREEN: Main (Log / History / Graphs / Settings)
+══════════════════════════════════ -->
+<div id="screen-main" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="goToBirds()">
+      <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <h1 id="main-bird-name">Bird</h1>
+    <button class="btn sm" onclick="editCurrentBird()">Edit</button>
+  </div>
+
+  <!-- LOG TAB -->
+  <div id="tab-log" class="scroll-area">
+    <div class="voice-area">
+      <button class="mic-btn" id="mic-btn" onclick="toggleVoice()" aria-label="Toggle voice input">
+        <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
+      <div class="voice-status" id="voice-status"><span class="status-dot off"></span>Tap mic to start listening</div>
+      <div class="voice-heard" id="voice-heard"></div>
+    </div>
+
+    <div class="card">
+      <h2>Voice commands</h2>
+      <div class="cmd-grid">
+        <div class="cmd"><strong>"Weight 32"</strong>Pre-feed weight</div>
+        <div class="cmd"><strong>"Post-feed 29.5"</strong>Post-feed weight</div>
+        <div class="cmd"><strong>"Food quail 1.5"</strong>Food type + weight</div>
+        <div class="cmd"><strong>"Temperature 48"</strong>Outside temp</div>
+        <div class="cmd"><strong>"Performance 8"</strong>Rating 1–10</div>
+        <div class="cmd"><strong>"Note she flew well"</strong>Journal entry</div>
+        <div class="cmd"><strong>"Cancel" / "Undo"</strong>Remove last entry</div>
+        <div class="cmd"><strong>"Done" / "Save"</strong>Stop listening</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Today</h2>
+      <div class="metric-grid">
+        <div class="metric-card"><div class="lbl">Pre-feed weight</div><div class="val" id="td-weight">--</div></div>
+        <div class="metric-card"><div class="lbl">Temperature</div><div class="val" id="td-temp">--</div></div>
+        <div class="metric-card"><div class="lbl">Food given</div><div class="val" id="td-food">--</div></div>
+        <div class="metric-card"><div class="lbl">Performance</div><div class="val" id="td-perf">--</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Manual entry</h2>
+      <label>Pre-feed weight</label>
+      <input id="m-pre" type="number" step="0.1" placeholder="0.0" inputmode="decimal">
+      <label>Post-feed weight <span style="font-weight:400;color:var(--text-faint)">(auto-calculates food eaten)</span></label>
+      <input id="m-post" type="number" step="0.1" placeholder="0.0" inputmode="decimal">
+      <label>Food type</label>
+      <input id="m-food-type" type="text" placeholder="quail, mouse, chick...">
+      <label>Food weight <span style="font-weight:400;color:var(--text-faint)">(leave blank if using pre/post)</span></label>
+      <input id="m-food-wt" type="number" step="0.1" placeholder="0.0" inputmode="decimal">
+      <label>Temperature (°F)</label>
+      <input id="m-temp" type="number" step="0.1" placeholder="0.0" inputmode="decimal">
+      <label>Performance (1–10)</label>
+      <div class="perf-row" id="perf-btns"></div>
+      <label>Journal / notes</label>
+      <textarea id="m-journal" placeholder="Anything worth noting about today's session..."></textarea>
+      <button class="btn primary full" style="margin-top:14px" onclick="saveManual()">Save entry</button>
+    </div>
+
+    <div class="card">
+      <h2>Pre/post weight calculator</h2>
+      <label>Pre-feed weight</label>
+      <input id="calc-pre" type="number" step="0.1" placeholder="0.0" inputmode="decimal">
+      <label>Post-feed weight</label>
+      <input id="calc-post" type="number" step="0.1" placeholder="0.0" inputmode="decimal">
+      <button class="btn full" style="margin-top:10px" onclick="runCalc()">Calculate food eaten</button>
+      <div id="calc-result" style="display:none" class="calc-result"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div id="tab-history" class="scroll-area" style="display:none">
+    <div id="history-list"></div>
+  </div>
+
+  <!-- GRAPHS TAB -->
+  <div id="tab-graphs" class="scroll-area" style="display:none">
+    <div class="card">
+      <h2>Weight over time</h2>
+      <div class="chart-wrap"><canvas id="ch-weight" role="img" aria-label="Weight over time"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Weight vs temperature</h2>
+      <div class="chart-wrap"><canvas id="ch-temp" role="img" aria-label="Weight vs temperature"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Weight vs performance</h2>
+      <div class="chart-wrap"><canvas id="ch-perf" role="img" aria-label="Weight vs performance"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Food intake over time</h2>
+      <div class="chart-wrap"><canvas id="ch-food" role="img" aria-label="Food intake over time"></canvas></div>
+    </div>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div id="tab-settings" class="scroll-area" style="display:none">
+    <div class="card" style="margin-bottom:0">
+      <h2>Units</h2>
+      <label>Weight display unit</label>
+      <select id="s-unit" onchange="saveSettings()">
+        <option value="oz">Ounces (oz)</option>
+        <option value="g">Grams (g)</option>
+        <option value="lbs_oz">Lbs + ounces</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <h2>Voice</h2>
+      <label>Auto-start listening when you select a bird</label>
+      <select id="s-autostart" onchange="saveSettings()">
+        <option value="1">Yes — start listening immediately</option>
+        <option value="0">No — tap mic manually</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <h2>Google Drive backup</h2>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
+        Automatically backs up all data to your Google Drive after every save. Requires a free Google Cloud OAuth client ID — see the README in your GitHub repo for setup steps.
+      </p>
+      <input id="s-client-id" type="text" placeholder="Paste your Google OAuth Client ID here" style="margin-bottom:10px">
+      <button class="btn full primary" onclick="driveSignIn()">Sign in with Google</button>
+      <div id="drive-status" style="font-size:13px;color:var(--text-muted);margin-top:8px;text-align:center"></div>
+      <button class="btn full" style="margin-top:8px" onclick="manualBackup()">Backup now</button>
+      <button class="btn full" style="margin-top:8px" onclick="restoreFromDrive()">Restore from Drive</button>
+    </div>
+
+    <div class="card">
+      <h2>Data</h2>
+      <button class="btn full" onclick="exportJSON()">Export all data as JSON</button>
+      <label style="margin-top:12px">Import from JSON backup</label>
+      <input type="file" id="import-file" accept=".json" onchange="importJSON(event)" style="font-size:13px;padding:6px">
+      <button class="btn danger full" style="margin-top:12px" onclick="clearAll()">Clear all data</button>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <button class="nav-btn active" id="nav-log" onclick="switchTab('log')">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Log
+    </button>
+    <button class="nav-btn" id="nav-history" onclick="switchTab('history')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      History
+    </button>
+    <button class="nav-btn" id="nav-graphs" onclick="switchTab('graphs')">
+      <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Graphs
+    </button>
+    <button class="nav-btn" id="nav-settings" onclick="switchTab('settings')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </button>
+  </nav>
+</div>
+
+</div><!-- #app -->
+
+<script>
+// ══════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════
+const DB = 'falconry_v2';
+let S = { birds: [], entries: [], settings: { unit: 'oz', autostart: '1' } };
+let currentBirdId = null;
+let editingBirdId = null;
+let selectedPerf = null;
+let isListening = false;
+let recognition = null;
+let driveToken = null;
+let charts = {};
+
+// ── Persistence ──
+function load() {
+  try { const d = localStorage.getItem(DB); if (d) S = { ...S, ...JSON.parse(d) }; } catch(e) {}
+  driveToken = localStorage.getItem('gdrive_token') || null;
+}
+function save() {
+  localStorage.setItem(DB, JSON.stringify(S));
+  if (driveToken) scheduleBackup();
+}
+let backupTimer = null;
+function scheduleBackup() { clearTimeout(backupTimer); backupTimer = setTimeout(doBackup, 3000); }
+
+// ── Helpers ──
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function today() { return new Date().toISOString().slice(0, 10); }
+function fmtW(val, unit) {
+  if (val == null || val === '' || isNaN(val)) return '--';
+  const v = parseFloat(val);
+  if (unit === 'g') return v.toFixed(1) + 'g';
+  if (unit === 'lbs_oz') { const lb = Math.floor(v / 16); const oz = (v % 16).toFixed(1); return lb + 'lb ' + oz + 'oz'; }
+  return v.toFixed(1) + 'oz';
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.95; u.pitch = 1;
+  window.speechSynthesis.speak(u);
+}
+function numFrom(str) { const m = str.match(/[\d.]+/); return m ? parseFloat(m[0]) : null; }
+
+// ══════════════════════════════════════════════════════
+// SCREENS
+// ══════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function goBack() { showScreen('screen-birds'); renderBirdList(); }
+function goToBirds() { stopListening(); showScreen('screen-birds'); renderBirdList(); }
+function editCurrentBird() { showAddBird(currentBirdId); }
+
+// ══════════════════════════════════════════════════════
+// BIRDS
+// ══════════════════════════════════════════════════════
+function renderBirdList() {
+  const list = document.getElementById('bird-list');
+  const none = document.getElementById('no-birds');
+  list.innerHTML = '';
+  if (!S.birds.length) { none.style.display = 'block'; return; }
+  none.style.display = 'none';
+  S.birds.forEach(b => {
+    const div = document.createElement('div');
+    div.className = 'bird-card';
+    div.innerHTML = `
+      <div class="bird-avatar">${b.name.slice(0,2).toUpperCase()}</div>
+      <div class="bird-info">
+        <h3>${b.name}</h3>
+        <p>${b.species || 'Unknown species'} &bull; Band: ${b.bandNumber || '--'}</p>
+      </div>
+    `;
+    div.onclick = () => selectBird(b.id);
+    list.appendChild(div);
+  });
+}
+
+function showAddBird(id) {
+  editingBirdId = id || null;
+  document.getElementById('add-bird-title').textContent = id ? 'Edit bird' : 'Add bird';
+  document.getElementById('btn-delete-bird').style.display = id ? 'inline-flex' : 'none';
+  const bh = document.getElementById('b-band-history');
+  if (id) {
+    const b = S.birds.find(x => x.id === id);
+    document.getElementById('b-name').value = b.name || '';
+    document.getElementById('b-species').value = b.species || '';
+    document.getElementById('b-band').value = b.bandNumber || '';
+    document.getElementById('b-arrival-date').value = b.arrivalDate || '';
+    document.getElementById('b-arrival-weight').value = b.arrivalWeight || '';
+    document.getElementById('b-target-min').value = b.targetMin || '';
+    document.getElementById('b-target-max').value = b.targetMax || '';
+    document.getElementById('b-notes').value = b.notes || '';
+    if (b.bandHistory && b.bandHistory.length) {
+      bh.style.display = 'block';
+      bh.textContent = 'Previous bands: ' + b.bandHistory.map(x => x.band + ' (' + x.date + ')').join(', ');
+    } else { bh.style.display = 'none'; }
+  } else {
+    ['b-name','b-species','b-band','b-arrival-date','b-arrival-weight','b-target-min','b-target-max','b-notes'].forEach(i => document.getElementById(i).value = '');
+    bh.style.display = 'none';
+  }
+  showScreen('screen-add-bird');
+}
+
+function saveBird() {
+  const name = document.getElementById('b-name').value.trim();
+  if (!name) { alert('Bird name is required.'); return; }
+  const band = document.getElementById('b-band').value.trim();
+  if (editingBirdId) {
+    const b = S.birds.find(x => x.id === editingBirdId);
+    if (b.bandNumber && b.bandNumber !== band && band) {
+      if (!b.bandHistory) b.bandHistory = [];
+      b.bandHistory.push({ band: b.bandNumber, date: today() });
+    }
+    b.name = name; b.species = document.getElementById('b-species').value.trim();
+    b.bandNumber = band; b.arrivalDate = document.getElementById('b-arrival-date').value;
+    b.arrivalWeight = document.getElementById('b-arrival-weight').value;
+    b.targetMin = document.getElementById('b-target-min').value;
+    b.targetMax = document.getElementById('b-target-max').value;
+    b.notes = document.getElementById('b-notes').value.trim();
+  } else {
+    S.birds.push({
+      id: uid(), name, species: document.getElementById('b-species').value.trim(),
+      bandNumber: band, arrivalDate: document.getElementById('b-arrival-date').value,
+      arrivalWeight: document.getElementById('b-arrival-weight').value,
+      targetMin: document.getElementById('b-target-min').value,
+      targetMax: document.getElementById('b-target-max').value,
+      notes: document.getElementById('b-notes').value.trim(), bandHistory: []
+    });
+  }
+  save(); renderBirdList(); showScreen('screen-birds'); showToast('Bird saved');
+}
+
+function deleteBird() {
+  if (!confirm('Delete this bird and all its log entries?')) return;
+  S.birds = S.birds.filter(x => x.id !== editingBirdId);
+  S.entries = S.entries.filter(x => x.birdId !== editingBirdId);
+  save(); renderBirdList(); showScreen('screen-birds'); showToast('Bird deleted');
+}
+
+function selectBird(id) {
+  currentBirdId = id;
+  const b = S.birds.find(x => x.id === id);
+  document.getElementById('main-bird-name').textContent = b.name;
+  showScreen('screen-main');
+  switchTab('log');
+  buildPerfButtons();
+  loadSettings();
+  updateToday();
+  if (S.settings.autostart === '1') {
+    setTimeout(() => { speak('Listening for ' + b.name); startListening(); }, 900);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════
+function switchTab(tab) {
+  ['log','history','graphs','settings'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === tab ? 'flex' : 'none';
+    document.getElementById('nav-' + t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'history') renderHistory();
+  if (tab === 'graphs') renderGraphs();
+  if (tab === 'settings') loadSettings();
+}
+
+// ══════════════════════════════════════════════════════
+// ENTRIES
+// ══════════════════════════════════════════════════════
+function updateToday() {
+  const u = S.settings.unit;
+  const todayEntries = S.entries.filter(e => e.birdId === currentBirdId && e.date === today());
+  const last = todayEntries[todayEntries.length - 1];
+  document.getElementById('td-weight').textContent = last?.prefeedWeight ? fmtW(last.prefeedWeight, u) : '--';
+  document.getElementById('td-temp').textContent = last?.temp ? last.temp + '°F' : '--';
+  const fw = last?.foodWeight || (last?.prefeedWeight && last?.postfeedWeight ? Math.abs(parseFloat(last.prefeedWeight) - parseFloat(last.postfeedWeight)).toFixed(2) : null);
+  document.getElementById('td-food').textContent = fw ? fmtW(fw, u) : '--';
+  document.getElementById('td-perf').textContent = last?.performance ? last.performance + '/10' : '--';
+}
+
+function buildPerfButtons() {
+  const c = document.getElementById('perf-btns'); c.innerHTML = '';
+  selectedPerf = null;
+  for (let i = 1; i <= 10; i++) {
+    const b = document.createElement('button');
+    b.className = 'perf-btn'; b.textContent = i;
+    b.onclick = () => {
+      selectedPerf = i;
+      document.querySelectorAll('.perf-btn').forEach((x, j) => x.classList.toggle('sel', j + 1 <= i));
+    };
+    c.appendChild(b);
+  }
+}
+
+function makeEntry(overrides) {
+  return { id: uid(), birdId: currentBirdId, date: today(), timestamp: new Date().toISOString(),
+    prefeedWeight: null, postfeedWeight: null, foodType: null, foodWeight: null,
+    temp: null, performance: null, journal: null, ...overrides };
+}
+
+function lastTodayEntry() {
+  const arr = S.entries.filter(e => e.birdId === currentBirdId && e.date === today());
+  return arr.length ? arr[arr.length - 1] : null;
+}
+
+function saveManual() {
+  const pre = document.getElementById('m-pre').value;
+  const post = document.getElementById('m-post').value;
+  const foodType = document.getElementById('m-food-type').value.trim();
+  const foodWt = document.getElementById('m-food-wt').value;
+  const temp = document.getElementById('m-temp').value;
+  const journal = document.getElementById('m-journal').value.trim();
+  const computed = pre && post ? Math.abs(parseFloat(pre) - parseFloat(post)).toFixed(2) : null;
+  S.entries.push(makeEntry({
+    prefeedWeight: pre || null, postfeedWeight: post || null,
+    foodType: foodType || null, foodWeight: foodWt || computed || null,
+    temp: temp || null, performance: selectedPerf || null, journal: journal || null
+  }));
+  save(); updateToday();
+  ['m-pre','m-post','m-food-type','m-food-wt','m-temp','m-journal'].forEach(id => document.getElementById(id).value = '');
+  selectedPerf = null; document.querySelectorAll('.perf-btn').forEach(x => x.classList.remove('sel'));
+  showToast('Entry saved'); speak('Entry saved');
+}
+
+function runCalc() {
+  const pre = parseFloat(document.getElementById('calc-pre').value);
+  const post = parseFloat(document.getElementById('calc-post').value);
+  const r = document.getElementById('calc-result');
+  if (isNaN(pre) || isNaN(post)) { r.style.display = 'none'; return; }
+  const diff = Math.abs(pre - post).toFixed(2);
+  const u = S.settings.unit;
+  r.style.display = 'block';
+  r.textContent = 'Food eaten: ' + fmtW(diff, u);
+}
+
+// ══════════════════════════════════════════════════════
+// HISTORY
+// ══════════════════════════════════════════════════════
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  const entries = S.entries.filter(e => e.birdId === currentBirdId).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  const u = S.settings.unit;
+  if (!entries.length) { list.innerHTML = '<div class="empty">No entries yet.</div>'; return; }
+  list.innerHTML = entries.map(e => `
+    <div class="log-item">
+      <div class="log-date">${e.date} &bull; ${e.timestamp.slice(11,16)}</div>
+      ${e.prefeedWeight ? `<div class="log-detail">Pre-feed: ${fmtW(e.prefeedWeight, u)}${e.postfeedWeight ? ' &rarr; Post: ' + fmtW(e.postfeedWeight, u) : ''}</div>` : ''}
+      ${e.journal ? `<div class="log-note">${e.journal}</div>` : ''}
+      <div class="tags">
+        ${e.foodType ? `<span class="tag food">${e.foodType}${e.foodWeight ? ' &bull; ' + fmtW(e.foodWeight, u) : ''}</span>` : ''}
+        ${e.performance ? `<span class="tag perf">${e.performance}/10</span>` : ''}
+        ${e.temp ? `<span class="tag temp">${e.temp}°F</span>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════
+// GRAPHS
+// ══════════════════════════════════════════════════════
+function renderGraphs() {
+  const entries = S.entries.filter(e => e.birdId === currentBirdId).sort((a, b) => a.date.localeCompare(b.date));
+  const bird = S.birds.find(x => x.id === currentBirdId);
+  const u = S.settings.unit;
+  const labels = entries.map(e => e.date.slice(5));
+  const weights = entries.map(e => e.prefeedWeight ? parseFloat(e.prefeedWeight) : null);
+
+  Object.values(charts).forEach(c => { try { c.destroy(); } catch(e) {} });
+  charts = {};
+
+  // Weight over time
+  const wds = [{ label: 'Weight', data: weights, borderColor: '#1D9E75', backgroundColor: 'rgba(29,158,117,0.08)', fill: true, tension: 0.3, spanGaps: true, pointRadius: 4 }];
+  if (bird.targetMin) wds.push({ label: 'Min target', data: entries.map(() => parseFloat(bird.targetMin)), borderColor: '#FAC775', borderDash: [5,4], pointRadius: 0, fill: false });
+  if (bird.targetMax) wds.push({ label: 'Max target', data: entries.map(() => parseFloat(bird.targetMax)), borderColor: '#F09595', borderDash: [5,4], pointRadius: 0, fill: false });
+  charts.weight = new Chart(document.getElementById('ch-weight'), {
+    type: 'line', data: { labels, datasets: wds },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: wds.length > 1, labels: { boxWidth: 12, font: { size: 11 } } } }, scales: { y: { title: { display: true, text: 'Weight (' + u + ')' } } } }
+  });
+
+  // Weight vs temp scatter
+  const tPairs = entries.filter(e => e.temp && e.prefeedWeight).map(e => ({ x: parseFloat(e.temp), y: parseFloat(e.prefeedWeight) }));
+  charts.temp = new Chart(document.getElementById('ch-temp'), {
+    type: 'scatter', data: { datasets: [{ label: 'Temp vs Weight', data: tPairs, backgroundColor: '#378ADD', pointRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'Temp (°F)' } }, y: { title: { display: true, text: 'Weight (' + u + ')' } } } }
+  });
+
+  // Weight vs performance scatter
+  const pPairs = entries.filter(e => e.performance && e.prefeedWeight).map(e => ({ x: parseFloat(e.prefeedWeight), y: e.performance }));
+  charts.perf = new Chart(document.getElementById('ch-perf'), {
+    type: 'scatter', data: { datasets: [{ label: 'Weight vs Perf', data: pPairs, backgroundColor: '#EF9F27', pointRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'Weight (' + u + ')' } }, y: { min: 0, max: 11, title: { display: true, text: 'Performance (1–10)' } } } }
+  });
+
+  // Food intake bar
+  const foods = entries.map(e => e.foodWeight ? parseFloat(e.foodWeight) : null);
+  charts.food = new Chart(document.getElementById('ch-food'), {
+    type: 'bar', data: { labels, datasets: [{ label: 'Food', data: foods, backgroundColor: 'rgba(186,117,23,0.65)', borderColor: '#BA7517', borderWidth: 1 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { title: { display: true, text: 'Food weight (' + u + ')' } } } }
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════════
+function loadSettings() {
+  document.getElementById('s-unit').value = S.settings.unit || 'oz';
+  document.getElementById('s-autostart').value = S.settings.autostart || '1';
+  const cid = localStorage.getItem('gdrive_client_id') || '';
+  document.getElementById('s-client-id').value = cid;
+  const status = document.getElementById('drive-status');
+  status.textContent = driveToken ? 'Connected to Google Drive. Auto-backup enabled.' : '';
+}
+function saveSettings() {
+  S.settings.unit = document.getElementById('s-unit').value;
+  S.settings.autostart = document.getElementById('s-autostart').value;
+  save(); showToast('Settings saved');
+}
+
+// ══════════════════════════════════════════════════════
+// VOICE
+// ══════════════════════════════════════════════════════
+function initVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { document.getElementById('voice-status').textContent = 'Voice not supported in this browser'; return; }
+  recognition = new SR();
+  recognition.continuous = true; recognition.interimResults = true; recognition.lang = 'en-US';
+  recognition.onresult = e => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    document.getElementById('voice-heard').textContent = final || interim;
+    if (final) { setTimeout(() => document.getElementById('voice-heard').textContent = '', 2000); processVoice(final.trim().toLowerCase()); }
+  };
+  recognition.onend = () => { if (isListening) { try { recognition.start(); } catch(e) {} } };
+  recognition.onerror = e => { if (e.error !== 'no-speech') console.log('SR:', e.error); };
+}
+
+function startListening() {
+  if (!recognition) return;
+  isListening = true;
+  try { recognition.start(); } catch(e) {}
+  document.getElementById('mic-btn').classList.add('listening');
+  document.getElementById('voice-status').innerHTML = '<span class="status-dot"></span>Listening...';
+}
+function stopListening() {
+  if (!recognition) return;
+  isListening = false;
+  try { recognition.stop(); } catch(e) {}
+  document.getElementById('mic-btn').classList.remove('listening');
+  document.getElementById('voice-status').innerHTML = '<span class="status-dot off"></span>Tap mic to start listening';
+  document.getElementById('voice-heard').textContent = '';
+}
+function toggleVoice() { isListening ? stopListening() : startListening(); }
+
+function processVoice(text) {
+  const u = S.settings.unit;
+  const t = today();
+
+  // Stop commands
+  if (/\b(stop|done|save|that'?s? all|finish)\b/.test(text)) { stopListening(); return; }
+
+  // Undo
+  if (/\b(cancel|undo|scratch that|remove that|delete that)\b/.test(text)) {
+    const all = S.entries.filter(e => e.birdId === currentBirdId);
+    if (all.length) {
+      const last = all[all.length - 1];
+      S.entries = S.entries.filter(e => e.id !== last.id);
+      save(); updateToday(); speak('Last entry removed.'); showToast('Removed last entry');
+    }
+    return;
+  }
+
+  // Weight
+  if (/\b(weight|weigh[st]?|pre.?feed|she weighs?)\b/.test(text)) {
+    const val = numFrom(text);
+    if (val) {
+      S.entries.push(makeEntry({ prefeedWeight: val }));
+      save(); updateToday();
+      speak('Weight ' + fmtW(val, u) + ' logged'); showToast('Weight: ' + fmtW(val, u));
+    }
+    return;
+  }
+
+  // Post-feed
+  if (/\b(post.?feed|after|she ate|post weight)\b/.test(text)) {
+    const val = numFrom(text); const last = lastTodayEntry();
+    if (val && last) {
+      const diff = Math.abs(parseFloat(last.prefeedWeight || 0) - val).toFixed(2);
+      last.postfeedWeight = val; if (!last.foodWeight) last.foodWeight = diff;
+      save(); updateToday();
+      speak('Post-feed ' + fmtW(val, u) + '. She ate ' + fmtW(diff, u)); showToast('Ate: ' + fmtW(diff, u));
+    }
+    return;
+  }
+
+  // Temperature
+  if (/\b(temp|temperature)\b/.test(text)) {
+    const val = numFrom(text);
+    if (val) {
+      const last = lastTodayEntry();
+      if (last) last.temp = val;
+      else S.entries.push(makeEntry({ temp: val }));
+      save(); updateToday();
+      speak('Temperature ' + val + ' degrees logged'); showToast('Temp: ' + val + '°F');
+    }
+    return;
+  }
+
+  // Food
+  if (/\b(food|fed|gave|quail|mouse|chick|rabbit|pigeon|starling|sparrow|rat|duck|squirrel|tidbit)\b/.test(text)) {
+    const wt = numFrom(text);
+    const typeM = text.match(/\b(quail|mouse|chick|rabbit|pigeon|starling|sparrow|rat|duck|squirrel|tidbit|prey)\b/i);
+    const foodType = typeM ? typeM[0] : 'food';
+    const last = lastTodayEntry();
+    if (last) { last.foodType = foodType; if (wt) last.foodWeight = wt; }
+    else S.entries.push(makeEntry({ foodType, foodWeight: wt || null }));
+    save(); updateToday();
+    speak('Food logged: ' + foodType + (wt ? ' ' + fmtW(wt, u) : '')); showToast('Food: ' + foodType + (wt ? ' ' + fmtW(wt, u) : ''));
+    return;
+  }
+
+  // Performance
+  if (/\b(performance|perf|rating|score)\b/.test(text)) {
+    const val = numFrom(text);
+    if (val >= 1 && val <= 10) {
+      const last = lastTodayEntry();
+      if (last) last.performance = Math.round(val);
+      else S.entries.push(makeEntry({ performance: Math.round(val) }));
+      save(); updateToday();
+      speak('Performance ' + Math.round(val) + ' out of 10'); showToast('Performance: ' + Math.round(val) + '/10');
+    }
+    return;
+  }
+
+  // Note / journal
+  if (/\b(note|journal|log that|record)\b/.test(text)) {
+    const noteText = text.replace(/^(note|journal|log that|record)[s]?\s*(that)?\s*/i, '').trim();
+    if (noteText.length > 2) {
+      const last = lastTodayEntry();
+      if (last) last.journal = (last.journal ? last.journal + '. ' : '') + noteText;
+      else S.entries.push(makeEntry({ journal: noteText }));
+      save(); speak('Note added.'); showToast('Note saved');
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// GOOGLE DRIVE
+// ══════════════════════════════════════════════════════
+function driveSignIn() {
+  const clientId = document.getElementById('s-client-id').value.trim();
+  if (!clientId) { alert('Paste your Google OAuth Client ID first.'); return; }
+  localStorage.setItem('gdrive_client_id', clientId);
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: window.location.href.split('?')[0].split('#')[0],
+    response_type: 'token',
+    scope: 'https://www.googleapis.com/auth/drive.appdata',
+    prompt: 'select_account'
+  });
+  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
+}
+
+function checkDriveCallback() {
+  const hash = new URLSearchParams(window.location.hash.slice(1));
+  const token = hash.get('access_token');
+  if (token) {
+    driveToken = token;
+    localStorage.setItem('gdrive_token', token);
+    window.history.replaceState(null, '', window.location.pathname);
+    showToast('Google Drive connected');
+  }
+}
+
+async function doBackup() {
+  if (!driveToken) return;
+  try {
+    const json = JSON.stringify(S);
+    const meta = { name: 'falconry_log.json', parents: ['appDataFolder'] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+    form.append('file', new Blob([json], { type: 'application/json' }));
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + driveToken }, body: form
+    });
+    if (!r.ok) { driveToken = null; localStorage.removeItem('gdrive_token'); }
+  } catch(e) { console.log('Backup failed', e); }
+}
+
+async function manualBackup() {
+  if (!driveToken) { showToast('Not signed in to Google Drive'); return; }
+  await doBackup(); showToast('Backed up to Drive');
+}
+
+async function restoreFromDrive() {
+  if (!driveToken) { showToast('Not signed in to Google Drive'); return; }
+  try {
+    const list = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'falconry_log.json'", { headers: { Authorization: 'Bearer ' + driveToken } });
+    const data = await list.json();
+    if (!data.files?.length) { showToast('No backup found in Drive'); return; }
+    const file = await fetch('https://www.googleapis.com/drive/v3/files/' + data.files[0].id + '?alt=media', { headers: { Authorization: 'Bearer ' + driveToken } });
+    const restored = await file.json();
+    S = { ...S, ...restored }; save(); renderBirdList();
+    showToast('Data restored from Drive');
+  } catch(e) { showToast('Restore failed'); }
+}
+
+// ══════════════════════════════════════════════════════
+// IMPORT / EXPORT
+// ══════════════════════════════════════════════════════
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = 'falconry_log_' + today() + '.json'; a.click();
+}
+
+function importJSON(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      S = { ...S, ...data }; save(); renderBirdList();
+      showToast('Data imported');
+    } catch(err) { alert('Invalid JSON file.'); }
+  };
+  reader.readAsText(file);
+}
+
+function clearAll() {
+  if (!confirm('Delete ALL birds and entries permanently?')) return;
+  S.birds = []; S.entries = []; save(); renderBirdList(); goToBirds(); showToast('All data cleared');
+}
+
+// ══════════════════════════════════════════════════════
+// SERVICE WORKER
+// ══════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW error', e));
+}
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+load();
+checkDriveCallback();
+initVoice();
+renderBirdList();
+// Default tab visibility
+['history','graphs','settings'].forEach(t => document.getElementById('tab-' + t).style.display = 'none');
+</script>
+</body>
+</html>
